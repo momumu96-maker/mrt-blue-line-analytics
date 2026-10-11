@@ -106,7 +106,7 @@ st.set_page_config(
 
 
 # ==================================================
-# 2. โหลดข้อมูลจริงและกระจายสัดส่วนรายสถานี
+# 2. โหลดข้อมูลทั้งหมดรวมถึง 2 ไฟล์ใหม่
 # ==================================================
 @st.cache_data
 def load_and_transform_data():
@@ -124,6 +124,19 @@ def load_and_transform_data():
     except:
         df_eval = pd.DataFrame()
 
+    # โหลดไฟล์ Actual vs Predicted ใหม่
+    try:
+        df_actual_pred = pd.read_csv("mrt_actual_vs_predicted.csv")
+        df_actual_pred["Date"] = pd.to_datetime(df_actual_pred["Date"])
+    except:
+        df_actual_pred = pd.DataFrame()
+
+    # โหลดไฟล์ Heatmap ใหม่
+    try:
+        df_heatmap = pd.read_csv("mrt_heatmap_weekday_month.csv")
+    except:
+        df_heatmap = pd.DataFrame()
+
     stations = [
         "ท่าพระ", "จรัญฯ 13", "ไฟฉาย", "บางขุนนนท์", "บางยี่ขัน",
         "สิรินธร", "บางพลัด", "บางอ้อ", "บางโพ", "เตาปูน",
@@ -136,9 +149,6 @@ def load_and_transform_data():
     ]
 
     np.random.seed(42)
-    weights = np.array([1.0 + 0.03 * (i % 7) for i in range(len(stations))])
-    weights = weights / weights.sum()
-
     expanded_rows = []
     for _, row in df_daily.iterrows():
         total_pax = row["Passengers"]
@@ -152,9 +162,9 @@ def load_and_transform_data():
             })
 
     df_stations = pd.DataFrame(expanded_rows)
-    return df_stations, df_forecast, df_eval, df_daily
+    return df_stations, df_forecast, df_eval, df_daily, df_actual_pred, df_heatmap
 
-df, df_forecast, df_eval, df_daily_raw = load_and_transform_data()
+df, df_forecast, df_eval, df_daily_raw, df_actual_pred, df_heatmap = load_and_transform_data()
 
 
 # ==================================================
@@ -411,7 +421,7 @@ elif page == "Date & Monthly Analysis":
 
 
 # ==================================================
-# 8. TREND & INSIGHTS
+# 8. TREND & INSIGHTS (เพิ่ม Heatmap จากไฟล์ใหม่)
 # ==================================================
 elif page == "Trend & Insights":
 
@@ -428,6 +438,20 @@ elif page == "Trend & Insights":
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    st.divider()
+    st.subheader("🔥 Heatmap: ความหนาแน่นจำแนกตามวันในสัปดาห์และเดือน")
+    if not df_heatmap.empty:
+        # ปรับแต่งข้อมูล Heatmap ให้พร้อมแสดงผล
+        hm_data = df_heatmap.copy()
+        # สมมติให้แถวแรกเป็นชื่อคอลัมน์ถ้าหัวตารางใน csv เป็น column_1
+        if "column_1" in hm_data.columns:
+            hm_data.columns = hm_data.iloc[0]
+            hm_data = hm_data.drop(0).reset_index(drop=True)
+        
+        st.dataframe(hm_data, use_container_width=True, hide_index=True)
+    else:
+        st.info("ไม่พบข้อมูลไฟล์ Heatmap")
+
     with st.expander("ℹ️ คำอธิบายระเบียบวิธีทางสถิติและตัวชี้วัด (Methodology Glossary)"):
         st.markdown("""
         * **Passengers (ข้อมูลจริง):** ยอดรวมผู้โดยสารรายวันผ่านระบบรถไฟฟ้า MRT สายสีน้ำเงิน
@@ -437,7 +461,7 @@ elif page == "Trend & Insights":
 
 
 # ==================================================
-# 9. PREDICTION & EVALUATION
+# 9. PREDICTION & EVALUATION (เพิ่มกราฟ Actual vs Predicted)
 # ==================================================
 elif page == "Prediction & Evaluation":
 
@@ -448,6 +472,21 @@ elif page == "Prediction & Evaluation":
         st.dataframe(df_eval, use_container_width=True, hide_index=True)
 
     st.divider()
+
+    # แสดงกราฟเปรียบเทียบ Actual vs Predicted จากไฟล์ใหม่
+    if not df_actual_pred.empty:
+        st.markdown("### 📉 กราฟเปรียบเทียบผู้โดยสารจริง (Actual) กับค่าทำนาย (Predicted)")
+        fig_ap = px.line(
+            df_actual_pred, x="Date", 
+            y=["Actual_Passengers", "Predicted_Passengers"],
+            template="plotly_white",
+            labels={"value": "จำนวนผู้โดยสาร (คน)", "Date": "วันที่", "variable": "ข้อมูล"}
+        )
+        st.plotly_chart(fig_ap, use_container_width=True)
+        
+        with st.expander("ดูตารางข้อมูลเปรียบเทียบ Actual vs Predicted"):
+            st.dataframe(df_actual_pred, use_container_width=True, hide_index=True)
+        st.divider()
 
     if not df_forecast.empty:
         st.markdown("### 📊 ข้อมูลพยากรณ์ 30 วันล่วงหน้า (30-Day Forecast)")
