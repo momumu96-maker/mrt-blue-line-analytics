@@ -206,7 +206,6 @@ st.caption(
 )
 st.divider()
 
-# ใช้ st.form เพื่อให้ผู้ใช้เลือกวันที่เสร็จแล้วกดปุ่ม "ค้นหาข้อมูล" ทีเดียว
 with st.expander("🔎 ตัวกรองช่วงวันที่ (Date Range Filter)", expanded=True):
     with st.form(key="date_filter_form"):
         col1, col2 = st.columns(2)
@@ -222,7 +221,6 @@ with st.expander("🔎 ตัวกรองช่วงวันที่ (Date
 
         submit_button = st.form_submit_button(label="🔍 ค้นหาข้อมูล (Search)")
 
-# จัดการตัวแปร Session State เพื่อจำค่าช่วงวันที่หลังกดปุ่มค้นหา
 if "applied_start" not in st.session_state:
     st.session_state.applied_start = min_d
     st.session_state.applied_end = max_d
@@ -236,7 +234,6 @@ if submit_button:
         st.session_state.applied_end = end_date
         st.success(f"อัปเดตข้อมูลช่วงวันที่: {start_date} ถึง {end_date}")
 
-# กรองข้อมูลตามวันที่ผู้ใช้กดปุ่มยืนยัน
 filtered = df[
     (df["วันที่"].dt.date >= st.session_state.applied_start)
     & (df["วันที่"].dt.date <= st.session_state.applied_end)
