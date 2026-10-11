@@ -197,7 +197,7 @@ selected_station = st.sidebar.selectbox(
 
 
 # ==================================================
-# 4. ส่วนหัวหลักและตัวกรอง
+# 4. ส่วนหัวหลักและตัวกรองพร้อมปุ่ม "ค้นหา" (Form)
 # ==================================================
 st.title("🚇 MRT Blue Line Enterprise Analytics")
 st.caption(
@@ -206,32 +206,40 @@ st.caption(
 )
 st.divider()
 
+# ใช้ st.form เพื่อให้ผู้ใช้เลือกวันที่เสร็จแล้วกดปุ่ม "ค้นหาข้อมูล" ทีเดียว
 with st.expander("🔎 ตัวกรองช่วงวันที่ (Date Range Filter)", expanded=True):
-    col1, col2 = st.columns(2)
+    with st.form(key="date_filter_form"):
+        col1, col2 = st.columns(2)
 
-    with col1:
-        start_date = st.date_input(
-            "วันที่เริ่มต้น",
-            value=df["วันที่"].min().date(),
-            min_value=df["วันที่"].min().date(),
-            max_value=df["วันที่"].max().date()
-        )
+        min_d = df["วันที่"].min().date()
+        max_d = df["วันที่"].max().date()
 
-    with col2:
-        end_date = st.date_input(
-            "วันที่สิ้นสุด",
-            value=df["วันที่"].max().date(),
-            min_value=df["วันที่"].min().date(),
-            max_value=df["วันที่"].max().date()
-        )
+        with col1:
+            start_date = st.date_input("วันที่เริ่มต้น", value=min_d, min_value=min_d, max_value=max_d)
 
-if start_date > end_date:
-    st.error("วันที่เริ่มต้นต้องไม่เกินวันที่สิ้นสุด")
-    st.stop()
+        with col2:
+            end_date = st.date_input("วันที่สิ้นสุด", value=max_d, min_value=min_d, max_value=max_d)
 
+        submit_button = st.form_submit_button(label="🔍 ค้นหาข้อมูล (Search)")
+
+# จัดการตัวแปร Session State เพื่อจำค่าช่วงวันที่หลังกดปุ่มค้นหา
+if "applied_start" not in st.session_state:
+    st.session_state.applied_start = min_d
+    st.session_state.applied_end = max_d
+
+if submit_button:
+    if start_date > end_date:
+        st.error("วันที่เริ่มต้นต้องไม่เกินวันที่สิ้นสุด")
+        st.stop()
+    else:
+        st.session_state.applied_start = start_date
+        st.session_state.applied_end = end_date
+        st.success(f"อัปเดตข้อมูลช่วงวันที่: {start_date} ถึง {end_date}")
+
+# กรองข้อมูลตามวันที่ผู้ใช้กดปุ่มยืนยัน
 filtered = df[
-    (df["วันที่"].dt.date >= start_date)
-    & (df["วันที่"].dt.date <= end_date)
+    (df["วันที่"].dt.date >= st.session_state.applied_start)
+    & (df["วันที่"].dt.date <= st.session_state.applied_end)
 ].copy()
 
 if selected_station != "ทุกสถานี":
@@ -258,7 +266,6 @@ if page == "Dashboard (ภาพรวม)":
     best_station = station_total.idxmax()
     best_date = daily_total.idxmax()
 
-    # คำนวณ Period-over-Period (เทียบกับค่าเฉลี่ยช่วงก่อนหน้ากึ่งหนึ่ง)
     half_len = max(1, len(daily_total) // 2)
     recent_half = daily_total.iloc[half_len:].mean()
     prev_half = daily_total.iloc[:half_len].mean()
@@ -276,7 +283,6 @@ if page == "Dashboard (ภาพรวม)":
     k3.metric("สถานีที่มีผู้ใช้สูงสุด", best_station)
     k4.metric("วันที่มีผู้ใช้สูงสุด", best_date.strftime("%d/%m/%Y"))
 
-    # === EXECUTIVE SUMMARY / AUTO INSIGHTS ===
     st.markdown("### 💡 Executive Insights (สรุปผู้บริหาร)")
     st.info(
         f"📌 **ข้อสังเกตสำคัญ:** ในช่วงวันที่เลือก สถานี **{best_station}** มีปริมาณผู้โดยสารหนาแน่นที่สุด "
@@ -313,10 +319,8 @@ if page == "Dashboard (ภาพรวม)":
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # === ADVANCED EXCEL EXPORT ===
     st.subheader("📥 ส่งออกรายงานขั้นสูง (Enterprise Report Export)")
     
-    # สร้างไฟล์ Excel ในหน่วยความจำด้วย BytesIO และ XlsxWriter
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         daily_total.reset_index().to_excel(writer, sheet_name='Daily_Summary', index=False)
@@ -427,7 +431,6 @@ elif page == "Trend & Insights":
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # === METHODOLOGY & GLOSSARY EXPANDER ===
     with st.expander("ℹ️ คำอธิบายระเบียบวิธีทางสถิติและตัวชี้วัด (Methodology Glossary)"):
         st.markdown("""
         * **Passengers (ข้อมูลจริง):** ยอดรวมผู้โดยสารรายวันผ่านระบบรถไฟฟ้า MRT สายสีน้ำเงิน
